@@ -55,26 +55,38 @@ async def predict(file: UploadFile = File(...)):
 
     # 2. Détection de visages
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    faces = state["face_cascade"].detectMultiScale(gray, 1.1, 5)
+    faces = state["face_cascade"].detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
 
-    # 3. Prédiction pour chaque visage détecté
-    results = []
+    if len(faces) == 0:
+        return {"faces_detected": 0, "predictions": []}
+
+    # 3. Construire un batch avec tous les visages détectés
+    #    Un seul appel model.predict() pour tous les visages (plus efficace)
+    batch = []
+    boxes = []
+
     for (x, y, w, h) in faces:
-        roi = img[y:y+h, x:x+w]
+        roi = img[y:y + h, x:x + w]
         roi = cv2.resize(roi, (100, 100))
-
         img_rgb = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)
-        img_array = np.expand_dims(img_rgb, axis=0)
-        img_preprocessed = preprocess_input(img_array.astype('float32'))
+        batch.append(img_rgb)
+        boxes.append((x, y, w, h))
 
-        prediction = state["model"].predict(img_preprocessed, verbose=0)
-        res_idx = int(np.argmax(prediction[0]))
-        confidence = float(np.max(prediction[0]))
+    # Normalisation VGG16 sur le batch complet : (N, 100, 100, 3)
+    batch_preprocessed = preprocess_input(np.array(batch, dtype='float32'))
 
+    # 4. Inférence en un seul appel pour tous les visages
+    predictions = state["model"].predict(batch_preprocessed, verbose=0)
+
+    # 5. Construire la liste des résultats
+    results = []
+    for i, (x, y, w, h) in enumerate(boxes):
+        res_idx    = int(np.argmax(predictions[i]))
+        confidence = float(np.max(predictions[i]))
         results.append({
-            "emotion": CLASS_NAMES[res_idx],
+            "emotion":    CLASS_NAMES[res_idx],
             "confidence": round(confidence * 100, 2),
-            "box": {"x": int(x), "y": int(y), "w": int(w), "h": int(h)},
+            "box":        {"x": int(x), "y": int(y), "w": int(w), "h": int(h)},
         })
 
     return {"faces_detected": len(results), "predictions": results}
