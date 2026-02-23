@@ -33,14 +33,32 @@ app = Flask(__name__)
 # Autorise les requêtes cross-origin (nécessaire pour index.html ouvert en file://)
 CORS(app)
 
-# Chargement du modèle et du détecteur UNE SEULE FOIS au démarrage du serveur
-# (évite de recharger 196 Mo à chaque requête)
-print("Chargement du modèle en mémoire...")
-model = load_model(MODEL_PATH)
-face_cascade = cv2.CascadeClassifier(
-    cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-)
-print("Modèle chargé. Serveur prêt.")
+# Variables globales initialisées au premier appel (voir _load_resources)
+model        = None
+face_cascade = None
+
+
+def _load_resources():
+    """
+    Charge le modèle et le détecteur de visages une seule fois.
+    Appelé via before_request pour éviter le double chargement
+    provoqué par le rechargeur Werkzeug en mode debug.
+    """
+    global model, face_cascade
+    if model is None:
+        print("Chargement du modèle en mémoire...")
+        model = load_model(MODEL_PATH)
+        face_cascade = cv2.CascadeClassifier(
+            cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+        )
+        print("Modèle chargé. Serveur prêt.")
+
+
+@app.before_request
+def before_request():
+    """Garantit que les ressources sont chargées avant chaque requête."""
+    _load_resources()
+
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
 
@@ -79,11 +97,16 @@ def predict():
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
 
-    results = []
+    if len(faces) == 0:
+        return jsonify({"faces_detected": 0, "predictions": []})
 
-    # 4. Pour chaque visage détecté, prédire l'émotion
+    # 4. Construire un batch avec tous les visages détectés
+    #    Corrige le problème de model.predict() appelé N fois dans une boucle :
+    #    on regroupe tous les visages en un seul tableau avant l'inférence.
+    batch   = []
+    boxes   = []
+
     for (x, y, w, h) in faces:
-
         # Découper la région d'intérêt (ROI) et la redimensionner en 100×100
         roi = img[y:y + h, x:x + w]
         roi = cv2.resize(roi, (100, 100))
@@ -91,16 +114,22 @@ def predict():
         # Convertir BGR→RGB (OpenCV lit en BGR, mais VGG16 attend du RGB)
         img_rgb = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)
 
-        # Ajouter la dimension batch : (100,100,3) → (1,100,100,3)
-        img_array = np.expand_dims(img_rgb, axis=0)
+        batch.append(img_rgb)
+        boxes.append((x, y, w, h))
 
-        # Normalisation propre à VGG16 : soustraction de la moyenne ImageNet
-        img_preprocessed = preprocess_input(img_array.astype('float32'))
+    # Normalisation propre à VGG16 : soustraction de la moyenne ImageNet
+    # batch_array : (N, 100, 100, 3)
+    batch_array      = np.array(batch, dtype='float32')
+    batch_preprocessed = preprocess_input(batch_array)
 
-        # Inférence : vecteur de probabilités sur les 7 classes
-        prediction = model.predict(img_preprocessed, verbose=0)
-        res_idx   = int(np.argmax(prediction[0]))     # indice de la classe prédite
-        confidence = float(np.max(prediction[0]))     # probabilité associée
+    # 5. Inférence en un seul appel pour tous les visages (plus efficace)
+    predictions = model.predict(batch_preprocessed, verbose=0)
+
+    # 6. Construire la liste des résultats
+    results = []
+    for i, (x, y, w, h) in enumerate(boxes):
+        res_idx    = int(np.argmax(predictions[i]))
+        confidence = float(np.max(predictions[i]))
 
         results.append({
             "emotion":    CLASS_NAMES[res_idx],
@@ -108,7 +137,6 @@ def predict():
             "box":        {"x": int(x), "y": int(y), "w": int(w), "h": int(h)}
         })
 
-    # 5. Retourner la liste des prédictions (liste vide si aucun visage trouvé)
     return jsonify({
         "faces_detected": len(results),
         "predictions":    results
