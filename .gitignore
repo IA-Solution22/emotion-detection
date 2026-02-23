@@ -1,6 +1,3 @@
-# Modèles entraînés (trop lourds pour GitHub, >100 MB)
-models/
-
 # Dataset RAF-DB (bind-mounté depuis l'hôte)
 DATASET/
 

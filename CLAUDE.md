@@ -40,9 +40,7 @@ raf-db/
 ├── CLAUDE.md
 │
 ├── models/                 # Modèles entraînés
-│   ├── model_raf.h5                  # Modèle principal (196 MB, chargé par app.py)
-│   ├── VGG16_RAFDB_84_percent.keras  # Checkpoint alternatif
-│   └── VGG16_RAFDB_percent.keras     # Checkpoint alternatif
+│   └── model_raf.h5                  # Modèle principal (196 MB, chargé par app.py)
 │
 ├── notebooks/              # Notebooks d'entraînement
 │   ├── raf transfert VGG16.ipynb     # Principal — VGG16 fine-tuning (meilleurs résultats)
