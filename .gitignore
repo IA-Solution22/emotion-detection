@@ -1,0 +1,17 @@
+# Modèles entraînés (trop lourds pour GitHub, >100 MB)
+models/
+
+# Dataset RAF-DB (bind-mounté depuis l'hôte)
+DATASET/
+
+# Vidéo de démonstration (trop lourde)
+doc/*.mp4
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Fichiers temporaires
+*.tmp
+~$*

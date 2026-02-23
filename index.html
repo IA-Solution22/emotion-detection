@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Détecteur d'Émotions IA – RAF-DB</title>
+  <style>
+    :root {
+      --accent: #4a90e2;
+      --accent-dark: #2c6fbe;
+      --bg: #f7f8fc;
+      --card: #ffffff;
+      --text: #2d2d2d;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --tag-bg: #e8f0fc;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+    }
+
+    /* ── HEADER ── */
+    header {
+      background: linear-gradient(135deg, #1e3a5f 0%, #4a90e2 100%);
+      color: white;
+      padding: 64px 24px 48px;
+      text-align: center;
+    }
+    header h1 { font-size: 2.4rem; font-weight: 700; margin-bottom: 12px; }
+    header p  { font-size: 1.1rem; opacity: .85; max-width: 600px; margin: 0 auto; }
+    .badge {
+      display: inline-block;
+      background: rgba(255,255,255,.2);
+      border: 1px solid rgba(255,255,255,.35);
+      border-radius: 99px;
+      padding: 4px 14px;
+      font-size: .8rem;
+      margin-top: 18px;
+      letter-spacing: .04em;
+    }
+
+    /* ── LAYOUT ── */
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    section { margin-bottom: 56px; }
+
+    h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent-dark);
+      border-left: 4px solid var(--accent);
+      padding-left: 12px;
+      margin-bottom: 20px;
+    }
+
+    h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin: 24px 0 8px;
+      color: var(--text);
+    }
+
+    p { margin-bottom: 14px; }
+
+    /* ── CARDS ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    }
+
+    /* ── DEMO WIDGET ── */
+    .demo-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+    #preview {
+      max-width: 100%;
+      max-height: 280px;
+      border-radius: 8px;
+      display: none;
+      border: 1px solid var(--border);
+    }
+    .btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 10px 28px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: .95rem;
+      font-weight: 600;
+      transition: background .2s;
+    }
+    .btn:hover { background: var(--accent-dark); }
+    .btn:disabled { background: #ccc; cursor: default; }
+    #results {
+      width: 100%;
+      background: #f1f5f9;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-family: monospace;
+      font-size: .88rem;
+      min-height: 48px;
+    }
+    .emotion-tag { font-weight: bold; color: #d9534f; }
+
+    /* ── STEPS ── */
+    .steps { counter-reset: step; }
+    .step {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .step:last-child { border-bottom: none; }
+    .step-num {
+      counter-increment: step;
+      flex-shrink: 0;
+      width: 36px; height: 36px;
+      background: var(--accent);
+      color: white;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700;
+      font-size: .95rem;
+    }
+    .step-num::after { content: counter(step); }
+    .step-body strong { display: block; margin-bottom: 4px; }
+
+    /* ── EMOTIONS GRID ── */
+    .emotion-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 12px;
+    }
+    .emotion-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 10px;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    }
+    .emotion-card .emoji { font-size: 2rem; display: block; margin-bottom: 6px; }
+    .emotion-card .name  { font-weight: 600; font-size: .85rem; }
+    .emotion-card .score { font-size: .75rem; color: var(--muted); margin-top: 4px; }
+
+    /* ── TECH STACK ── */
+    .tech-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 0;
+      list-style: none;
+    }
+    .tech-list li {
+      background: var(--tag-bg);
+      color: var(--accent-dark);
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: .85rem;
+      font-weight: 500;
+    }
+
+    /* ── PERF TABLE ── */
+    table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    th { background: var(--accent); color: white; padding: 10px 14px; text-align: left; }
+    td { padding: 9px 14px; border-bottom: 1px solid var(--border); }
+    tr:last-child td { border-bottom: none; }
+    tr:nth-child(even) td { background: #f8faff; }
+    .bar-wrap { background: #e5e7eb; border-radius: 99px; height: 8px; width: 100%; margin-top: 4px; }
+    .bar { background: var(--accent); height: 8px; border-radius: 99px; }
+
+    /* ── PIPELINE ── */
+    .pipeline {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0;
+      margin: 16px 0;
+    }
+    .pipe-step {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: .85rem;
+      font-weight: 500;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    .pipe-arrow { color: var(--accent); font-size: 1.2rem; padding: 0 8px; font-weight: 700; }
+
+    /* ── FOOTER ── */
+    footer {
+      text-align: center;
+      padding: 32px;
+      font-size: .82rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🎭 Détecteur d'Émotions Faciales</h1>
+  <p>Système d'intelligence artificielle capable de reconnaître les émotions humaines à partir d'une photo, en temps réel.</p>
+  <span class="badge">Projet IA · RAF-DB · VGG16 Transfer Learning</span>
+</header>
+
+<main>
+
+  <!-- DÉMO -->
+  <section>
+    <h2>Démo</h2>
+    <div class="card">
+      <div class="demo-inner">
+        <input type="file" id="imageInput" accept="image/*">
+        <img id="preview" src="#" alt="Aperçu">
+        <button class="btn" id="uploadBtn">Analyser l'image</button>
+        <div id="results">Les résultats s'afficheront ici...</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRÉSENTATION -->
+  <section>
+    <h2>Présentation du projet</h2>
+    <div class="card">
+      <p>
+        Ce projet est un système de <strong>reconnaissance automatique des émotions faciales</strong>.
+        À partir d'une simple photo, il détecte les visages présents et prédit l'émotion dominante de chaque personne
+        avec un degré de confiance associé.
+      </p>
+      <p>
+        Le modèle a été entraîné sur le dataset <strong>RAF-DB</strong> (Real-world Affective Faces Database),
+        une base de données de référence dans le domaine, composée de plus de <strong>15 000 images</strong>
+        de visages annotées par des humains selon 7 émotions de base.
+      </p>
+      <p style="margin-bottom:0;">
+        La précision globale atteinte est de <strong>82,4 %</strong> sur les données de test —
+        un résultat compétitif pour ce type de tâche sur un dataset en conditions réelles.
+      </p>
+    </div>
+  </section>
+
+  <!-- ÉMOTIONS RECONNUES -->
+  <section>
+    <h2>Émotions reconnues</h2>
+    <div class="emotion-grid">
+      <div class="emotion-card">
+        <span class="emoji">😮</span>
+        <div class="name">Surprise</div>
+        <div class="score">F1 : 83 %</div>
+      </div>
+      <div class="emotion-card">
+        <span class="emoji">😨</span>
+        <div class="name">Peur</div>
+        <div class="score">F1 : 63 %</div>
+      </div>
+      <div class="emotion-card">
+        <span class="emoji">🤢</span>
+        <div class="name">Dégoût</div>
+        <div class="score">F1 : 41 %</div>
+      </div>
+      <div class="emotion-card">
+        <span class="emoji">😄</span>
+        <div class="name">Joie</div>
+        <div class="score">F1 : 93 %</div>
+      </div>
+      <div class="emotion-card">
+        <span class="emoji">😢</span>
+        <div class="name">Tristesse</div>
+        <div class="score">F1 : 75 %</div>
+      </div>
+      <div class="emotion-card">
+        <span class="emoji">😠</span>
+        <div class="name">Colère</div>
+        <div class="score">F1 : 70 %</div>
+      </div>
+      <div class="emotion-card">
+        <span class="emoji">😐</span>
+        <div class="name">Neutre</div>
+        <div class="score">F1 : 79 %</div>
+      </div>
+    </div>
+    <p style="margin-top:14px; font-size:.88rem; color:var(--muted);">
+      Le score F1 mesure la qualité de reconnaissance pour chaque émotion (précision + rappel).
+      Les émotions peu représentées dans le dataset (Peur, Dégoût) sont naturellement plus difficiles à reconnaître.
+    </p>
+  </section>
+
+  <!-- COMMENT ÇA MARCHE -->
+  <section>
+    <h2>Comment ça marche ?</h2>
+    <div class="pipeline card">
+      <div class="pipe-step">📷 Image</div>
+      <span class="pipe-arrow">→</span>
+      <div class="pipe-step">🔍 Détection<br>des visages</div>
+      <span class="pipe-arrow">→</span>
+      <div class="pipe-step">✂️ Découpage<br>& redimensionnement</div>
+      <span class="pipe-arrow">→</span>
+      <div class="pipe-step">🧠 Modèle IA<br>(VGG16)</div>
+      <span class="pipe-arrow">→</span>
+      <div class="pipe-step">📊 Résultat</div>
+    </div>
+    <div class="steps card" style="padding: 8px 24px;">
+      <div class="step">
+        <div class="step-num"></div>
+        <div class="step-body">
+          <strong>Détection des visages</strong>
+          Un algorithme de vision par ordinateur (Haar Cascade d'OpenCV) localise automatiquement tous les visages dans l'image, quelle que soit leur position ou taille.
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num"></div>
+        <div class="step-body">
+          <strong>Prétraitement</strong>
+          Chaque visage est découpé, redimensionné en 100×100 pixels et normalisé selon les standards de VGG16.
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num"></div>
+        <div class="step-body">
+          <strong>Inférence par le réseau de neurones</strong>
+          Le modèle analyse les caractéristiques visuelles du visage et calcule une probabilité pour chacune des 7 émotions.
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num"></div>
+        <div class="step-body">
+          <strong>Résultat</strong>
+          L'émotion avec la probabilité la plus haute est retournée avec son pourcentage de confiance.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ARCHITECTURE TECHNIQUE -->
+  <section>
+    <h2>Architecture technique</h2>
+    <h3>Modèle d'intelligence artificielle</h3>
+    <div class="card">
+      <p>
+        Le modèle repose sur <strong>VGG16</strong>, un réseau de neurones convolutif pré-entraîné sur ImageNet
+        (plus de 14 millions d'images). Cette technique, appelée <em>transfer learning</em>, permet
+        de bénéficier des capacités d'extraction visuelle d'un modèle généraliste et de les spécialiser
+        sur la reconnaissance d'émotions.
+      </p>
+      <p style="margin-bottom:0;">
+        Une tête de classification personnalisée a été ajoutée et le modèle complet a été ré-entraîné
+        (fine-tuning) sur RAF-DB pendant 50 epochs avec arrêt anticipé.
+      </p>
+    </div>
+    <h3>Stack technologique</h3>
+    <ul class="tech-list">
+      <li>Python 3.10</li>
+      <li>TensorFlow 2 / Keras</li>
+      <li>VGG16 (ImageNet)</li>
+      <li>OpenCV</li>
+      <li>FastAPI</li>
+      <li>Uvicorn</li>
+      <li>NumPy</li>
+      <li>Docker (NVIDIA)</li>
+      <li>RAF-DB Dataset</li>
+    </ul>
+  </section>
+
+  <!-- PERFORMANCES -->
+  <section>
+    <h2>Performances du modèle</h2>
+    <div class="card" style="padding:0; overflow:hidden;">
+      <table>
+        <thead>
+          <tr>
+            <th>Émotion</th>
+            <th>Score F1</th>
+            <th>Visualisation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>😄 Joie</td>
+            <td><strong>93 %</strong></td>
+            <td><div class="bar-wrap"><div class="bar" style="width:93%"></div></div></td>
+          </tr>
+          <tr>
+            <td>😮 Surprise</td>
+            <td><strong>83 %</strong></td>
+            <td><div class="bar-wrap"><div class="bar" style="width:83%"></div></div></td>
+          </tr>
+          <tr>
+            <td>😐 Neutre</td>
+            <td><strong>79 %</strong></td>
+            <td><div class="bar-wrap"><div class="bar" style="width:79%"></div></div></td>
+          </tr>
+          <tr>
+            <td>😢 Tristesse</td>
+            <td><strong>75 %</strong></td>
+            <td><div class="bar-wrap"><div class="bar" style="width:75%"></div></div></td>
+          </tr>
+          <tr>
+            <td>😠 Colère</td>
+            <td><strong>70 %</strong></td>
+            <td><div class="bar-wrap"><div class="bar" style="width:70%"></div></div></td>
+          </tr>
+          <tr>
+            <td>😨 Peur</td>
+            <td><strong>63 %</strong></td>
+            <td><div class="bar-wrap"><div class="bar" style="width:63%"></div></div></td>
+          </tr>
+          <tr>
+            <td>🤢 Dégoût</td>
+            <td><strong>41 %</strong></td>
+            <td><div class="bar-wrap"><div class="bar" style="width:41%"></div></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:.88rem; color:var(--muted); margin-top:10px;">
+      <strong>Précision globale : 82,4 %</strong> (moyenne pondérée sur 3 068 images de test).
+      Les scores plus faibles sur Peur et Dégoût s'expliquent par le faible nombre d'exemples
+      d'entraînement disponibles pour ces classes (respectivement 74 et 160 images).
+    </p>
+  </section>
+
+</main>
+
+<footer>
+  Projet de reconnaissance d'émotions faciales · Entraîné sur RAF-DB · Modèle VGG16 Transfer Learning
+</footer>
+
+<script>
+  // ── Références DOM ────────────────────────────────────────────────────────
+  const imageInput = document.getElementById('imageInput');
+  const preview    = document.getElementById('preview');
+  const uploadBtn  = document.getElementById('uploadBtn');
+  const resultsDiv = document.getElementById('results');
+
+  // ── Aperçu de l'image sélectionnée ───────────────────────────────────────
+  // Dès qu'un fichier est choisi, on l'affiche en aperçu sans l'envoyer
+  imageInput.onchange = () => {
+    const [file] = imageInput.files;
+    if (file) {
+      preview.src = URL.createObjectURL(file);
+      preview.style.display = 'block';
+    }
+  };
+
+  // ── Envoi de l'image à l'API et affichage des résultats ──────────────────
+  uploadBtn.onclick = async () => {
+    const file = imageInput.files[0];
+    if (!file) return alert("Choisis une image d'abord !");
+
+    // Construire un objet FormData pour l'envoi multipart/form-data
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // Désactiver le bouton pendant l'appel pour éviter les doubles envois
+    uploadBtn.disabled = true;
+    resultsDiv.innerHTML = "⌛ Analyse en cours...";
+
+    try {
+      // Appel POST vers l'API Flask (doit être démarrée avec python app.py)
+      const response = await fetch('http://localhost:5000/predict', {
+        method: 'POST',
+        body: formData
+      });
+
+      // Vérifier que l'API a répondu avec un statut HTTP succès (2xx)
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        resultsDiv.innerHTML = `❌ Erreur API (${response.status}) : ${err.error || err.detail || 'inconnue'}`;
+        return;
+      }
+
+      const data = await response.json();
+
+      // Afficher les prédictions si au moins un visage a été détecté
+      if (data.faces_detected > 0) {
+        let html = `<strong>${data.faces_detected} visage(s) trouvé(s) :</strong><br>`;
+        data.predictions.forEach(p => {
+          html += `<p>• Émotion : <span class="emotion-tag">${p.emotion}</span> (${p.confidence}%)</p>`;
+        });
+        resultsDiv.innerHTML = html;
+      } else {
+        resultsDiv.innerHTML = "❌ Aucun visage détecté.";
+      }
+
+    } catch (error) {
+      // L'API est inaccessible (non démarrée, mauvais port, etc.)
+      resultsDiv.innerHTML = "❌ Erreur de connexion à l'API.";
+      console.error(error);
+    } finally {
+      // Toujours réactiver le bouton, que la requête ait réussi ou non
+      uploadBtn.disabled = false;
+    }
+  };
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{
+    "name": "Mon Projet IA (5070 Ti)",
+    "image": "nvcr.io/nvidia/tensorflow:25.02-tf2-py3",
+    "runArgs": [
+        "--gpus", "all",
+        "--ipc=host",
+        "--ulimit", "memlock=-1",
+        "--ulimit", "stack=67108864"
+    ],
+    "mounts": [
+        "source=c:/ProjetIA/raf-db/DATASET,target=/workspace/DATASET,type=bind"
+    ],
+    // --- COPIE CETTE COMMANDE ---
+    "postCreateCommand": "apt-get update && apt-get install -y libglib2.0-0 libgl1 && python3 -m pip install --upgrade pip && python3 -m pip uninstall -y numpy scipy seaborn opencv-python opencv-python-headless && python3 -m pip install --no-cache-dir 'numpy<2.0.0' 'scipy<1.13.0' 'opencv-python-headless<4.10' seaborn matplotlib",
+    
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-toolsai.jupyter"
+            ]
+        }
+    }
+}
+
+
