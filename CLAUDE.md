@@ -4,19 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Facial Emotion Recognition (FER) system trained on the RAF-DB dataset. Classifies 7 emotions from facial images using VGG16 transfer learning, served via a Flask REST API with a vanilla JS frontend.
+Facial Emotion Recognition (FER) system trained on the RAF-DB dataset. Classifies 7 emotions from facial images using VGG16 transfer learning, served via a FastAPI REST API with a vanilla JS frontend.
 
 ## Running the Project
 
 ```bash
-# Start the Flask inference API (loads models/model_raf.h5 on startup)
+# Start the FastAPI inference API (loads models/model_raf.h5 on startup)
+python app_fastapi.py
+# Runs on 0.0.0.0:5000
+
+# Alternative : API Flask
 python app.py
 # Runs on 0.0.0.0:5000
 
 # Verify GPU/TensorFlow setup
 python test/testgpu.py
 
-# Open index.html directly in a browser (requires the Flask API to be running)
+# Open index.html directly in a browser (requires the API to be running)
 ```
 
 The web UI (`index.html`) calls `http://localhost:5000/predict` via `fetch`. The API accepts a `multipart/form-data` POST with a `file` field and returns JSON.
@@ -34,13 +38,16 @@ The DATASET directory is bind-mounted from the host (`c:/ProjetIA/raf-db/DATASET
 
 ```
 raf-db/
-├── app.py                  # API Flask principale (inference)
-├── app_fastapi.py          # API FastAPI alternative
+├── app_fastapi.py          # API FastAPI principale (inference) — à utiliser
+├── app.py                  # API Flask alternative
 ├── index.html              # Frontend vanilla JS
 ├── CLAUDE.md
 │
+├── css/                    # Feuilles de style
+│   └── style.css           # Styles du frontend (extrait de index.html)
+│
 ├── models/                 # Modèles entraînés
-│   └── model_raf.h5                  # Modèle principal (196 MB, chargé par app.py)
+│   └── model_raf.h5        # Modèle principal (196 MB, suivi via Git LFS)
 │
 ├── notebooks/              # Notebooks d'entraînement
 │   ├── raf transfert VGG16.ipynb     # Principal — VGG16 fine-tuning (meilleurs résultats)
@@ -75,9 +82,9 @@ raf-db/
 
 ## Architecture
 
-### Inference Pipeline (`app.py`)
-1. Au démarrage : charge `models/model_raf.h5` et le Haar Cascade OpenCV
-2. `POST /predict` : décode l'image → détection visages en niveaux de gris (`detectMultiScale(gray, 1.1, 5)`) → pour chaque visage : crop, resize 100×100, BGR→RGB, `preprocess_input` VGG16, inférence, retourne classe + confiance
+### Inference Pipeline (`app_fastapi.py`)
+1. Au démarrage (lifespan) : charge `models/model_raf.h5` et le Haar Cascade OpenCV
+2. `POST /predict` : décode l'image → détection visages en niveaux de gris (`detectMultiScale(gray, 1.1, 5)`) → regroupe tous les visages en un batch → un seul appel `model.predict()` → retourne classe + confiance pour chaque visage
 3. Réponse : `{ "faces_detected": N, "predictions": [{ "emotion", "confidence", "box" }] }`
 
 ### Emotion Classes
