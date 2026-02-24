@@ -3,9 +3,8 @@ title: Détection d'émotions faciales
 emoji: 😊
 colorFrom: blue
 colorTo: red
-sdk: streamlit
-sdk_version: 1.54.0
-app_file: hf_app.py
+sdk: docker
+app_port: 7860
 pinned: false
 ---
 
