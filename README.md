@@ -1,6 +1,17 @@
+---
+title: Détection d'émotions faciales
+emoji: 😊
+colorFrom: blue
+colorTo: red
+sdk: streamlit
+sdk_version: 1.54.0
+app_file: hf_app.py
+pinned: false
+---
+
 # Reconnaissance d'émotions faciales — RAF-DB
 
-Système de reconnaissance d'émotions faciales entraîné sur le dataset **RAF-DB** (Real-world Affective Faces Database). Le modèle classifie 7 émotions à partir d'images de visages via du **transfer learning VGG16**, exposé par une **API REST FastAPI** et consommable via deux interfaces : une page web vanilla JS et un chatbot Streamlit avec capture caméra.
+Système de reconnaissance d'émotions faciales entraîné sur le dataset **RAF-DB** (Real-world Affective Faces Database). Le modèle classifie 7 émotions à partir d'images de visages via du **transfer learning VGG16**, exposé par une **API REST FastAPI** et consommable via deux interfaces : une page web vanilla JS et un chatbot Streamlit interactif.
 
 ---
 
@@ -61,7 +72,7 @@ VGG16 (ImageNet, toutes les couches dégelées)
 raf-db/
 ├── app_fastapi.py        # API FastAPI principale (inference)
 ├── app.py                # API Flask alternative
-├── streamlit_app.py      # Chatbot Streamlit avec capture caméra
+├── streamlit_app.py      # Chatbot Streamlit (caméra + upload fichier)
 ├── index.html            # Frontend vanilla JS
 │
 ├── models/
@@ -115,13 +126,19 @@ python app_fastapi.py
 
 Ouvrir `index.html` directement dans le navigateur (l'API doit tourner).
 
-### 5. Chatbot Streamlit (avec caméra)
+### 5. Chatbot Streamlit
 
 ```bash
 pip install streamlit requests
 streamlit run streamlit_app.py
 # Disponible sur http://localhost:8501
 ```
+
+Le chatbot propose deux modes d'entrée au démarrage :
+- **📷 Caméra** — prise de photo en direct
+- **📁 Fichier** — chargement d'une image depuis le PC (JPG, PNG, WEBP)
+
+Après chaque analyse, des boutons **Continuer** (même mode) et **Changer de mode** sont affichés sous le résultat.
 
 ---
 

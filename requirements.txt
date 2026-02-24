@@ -1,0 +1,4 @@
+tensorflow-cpu
+opencv-python-headless
+numpy<2.0.0
+streamlit==1.54.0

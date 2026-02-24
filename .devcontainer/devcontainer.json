@@ -14,12 +14,22 @@
     "source=c:/ProjetIA/raf-db/DATASET,target=/workspace/DATASET,type=bind"
   ],
   "forwardPorts": [
-    43557
+    43557,
+    5000,
+    8501
   ],
   "portsAttributes": {
     "43557": {
       "label": "Claude Code OAuth",
       "onAutoForward": "silent"
+    },
+    "5000": {
+      "label": "FastAPI API",
+      "onAutoForward": "notify"
+    },
+    "8501": {
+      "label": "Streamlit App",
+      "onAutoForward": "openBrowser"
     }
   },
   "remoteEnv": {

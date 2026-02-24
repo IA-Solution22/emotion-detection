@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Facial Emotion Recognition (FER) system trained on the RAF-DB dataset. Classifies 7 emotions from facial images using VGG16 transfer learning, served via a FastAPI REST API with a vanilla JS frontend.
+Facial Emotion Recognition (FER) system trained on the RAF-DB dataset. Classifies 7 emotions from facial images using VGG16 transfer learning, served via a FastAPI REST API with a vanilla JS frontend and an interactive Streamlit chatbot.
 
 ## Running the Project
 
@@ -22,9 +22,10 @@ python test/testgpu.py
 
 # Open index.html directly in a browser (requires the API to be running)
 
-# Streamlit chatbot with camera (requires the API to be running)
+# Streamlit chatbot — camera + file upload (requires the API to be running)
 pip install streamlit requests
 streamlit run streamlit_app.py
+# Runs on 0.0.0.0:8501
 ```
 
 The web UI (`index.html`) calls `http://localhost:5000/predict` via `fetch`. The API accepts a `multipart/form-data` POST with a `file` field and returns JSON.
@@ -44,6 +45,7 @@ The DATASET directory is bind-mounted from the host (`c:/ProjetIA/raf-db/DATASET
 raf-db/
 ├── app_fastapi.py          # API FastAPI principale (inference) — à utiliser
 ├── app.py                  # API Flask alternative
+├── streamlit_app.py        # Chatbot Streamlit (caméra + upload fichier)
 ├── index.html              # Frontend vanilla JS
 ├── CLAUDE.md
 │
@@ -90,6 +92,14 @@ raf-db/
 1. Au démarrage (lifespan) : charge `models/model_raf.h5` et le Haar Cascade OpenCV
 2. `POST /predict` : décode l'image → détection visages en niveaux de gris (`detectMultiScale(gray, 1.1, 5)`) → regroupe tous les visages en un batch → un seul appel `model.predict()` → retourne classe + confiance pour chaque visage
 3. Réponse : `{ "faces_detected": N, "predictions": [{ "emotion", "confidence", "box" }] }`
+
+### Streamlit Chatbot (`streamlit_app.py`)
+- Message de bienvenue expliquant l'app et les 7 émotions
+- Choix du mode : 📷 caméra ou 📁 upload fichier (JPG, PNG, WEBP)
+- Après analyse : boutons **Continuer** (même mode) et **Changer de mode**
+- `confidence` renvoyée par l'API déjà en pourcentage (0–100), ne pas multiplier par 100
+- Layout coloré via CSS injecté (`st.markdown`) — fond dégradé bleu nuit, cadre cyan
+- Cadre chatbot ciblé via `st.container(border=True, key="chatbot")` → `.st-key-chatbot` en CSS
 
 ### Emotion Classes
 Indexed 0–6, mapped from RAF-DB labels 1–7:
