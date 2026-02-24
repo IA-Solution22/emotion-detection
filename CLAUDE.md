@@ -21,6 +21,10 @@ python app.py
 python test/testgpu.py
 
 # Open index.html directly in a browser (requires the API to be running)
+
+# Streamlit chatbot with camera (requires the API to be running)
+pip install streamlit requests
+streamlit run streamlit_app.py
 ```
 
 The web UI (`index.html`) calls `http://localhost:5000/predict` via `fetch`. The API accepts a `multipart/form-data` POST with a `file` field and returns JSON.
