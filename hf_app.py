@@ -4,6 +4,13 @@ import cv2
 from PIL import Image
 import io
 
+# Support HEIC/HEIF (photos iPhone)
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    pass
+
 MODEL_PATH = "models/model_raf.h5"
 
 CLASS_NAMES = ['Surprise', 'Peur', 'Dégoût', 'Joie', 'Tristesse', 'Colère', 'Neutre']
@@ -17,17 +24,6 @@ EMOTION_EMOJI = {
     'Colère':    '😠',
     'Neutre':    '😐',
 }
-
-WELCOME_MESSAGE = """Bonjour ! 👋 Je suis un assistant de **reconnaissance d'émotions faciales**.
-
-Je peux analyser une photo de visage et détecter parmi 7 émotions :
-
-😮 Surprise · 😨 Peur · 🤢 Dégoût · 😄 Joie · 😢 Tristesse · 😠 Colère · 😐 Neutre
-
-Comment souhaitez-vous procéder ?
-
-**1️⃣ Utiliser la caméra** — prenez une photo en direct
-**2️⃣ Charger un fichier** — sélectionnez une image depuis votre PC"""
 
 CSS = """
 <style>
@@ -107,8 +103,10 @@ def load_resources():
 
 
 def image_bytes_to_cv2(image_bytes):
-    """Convertit les bytes d'image en tableau OpenCV BGR via PIL (support universel)."""
-    pil_img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    from PIL import ImageOps
+    pil_img = Image.open(io.BytesIO(image_bytes))
+    pil_img = ImageOps.exif_transpose(pil_img)
+    pil_img = pil_img.convert("RGB")
     img_rgb = np.array(pil_img)
     return cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
 
@@ -116,9 +114,7 @@ def image_bytes_to_cv2(image_bytes):
 def predict(image_bytes):
     try:
         model, cascade, preprocess_input = load_resources()
-
         img = image_bytes_to_cv2(image_bytes)
-
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
 
@@ -150,7 +146,6 @@ def predict(image_bytes):
 
 
 def run_prediction(image_bytes):
-    """Lance la prédiction, stocke le résultat dans session_state."""
     with st.spinner("Analyse en cours..."):
         faces, predictions, error = predict(image_bytes)
 
@@ -173,23 +168,31 @@ def run_prediction(image_bytes):
     st.rerun()
 
 
+def detect_mobile():
+    try:
+        ua = st.context.headers.get("User-Agent", "")
+        return any(x in ua.lower() for x in ["mobile", "android", "iphone", "ipad"])
+    except Exception:
+        return False
+
+
 # --- INIT ---
 st.set_page_config(page_title="Détection d'émotions", page_icon="😊")
 st.markdown(CSS, unsafe_allow_html=True)
 st.title("Détection d'émotions faciales")
 
-# Pré-chargement du modèle au démarrage
 try:
     load_resources()
 except Exception as e:
     st.error(f"Erreur au chargement du modèle : {e}")
     st.stop()
 
-# Session state
-if "mode" not in st.session_state:
-    st.session_state.mode = None
+is_mobile = detect_mobile()
+
 if "input_key" not in st.session_state:
     st.session_state.input_key = 0
+if "mode" not in st.session_state:
+    st.session_state.mode = None
 if "result_text" not in st.session_state:
     st.session_state.result_text = None
 if "result_image" not in st.session_state:
@@ -197,83 +200,103 @@ if "result_image" not in st.session_state:
 
 with st.container(border=True, key="chatbot"):
 
-    with st.chat_message("assistant"):
-        st.write(WELCOME_MESSAGE)
-
-    # Choix du mode
-    if st.session_state.mode is None:
-        st.session_state.result_text = None
-        st.session_state.result_image = None
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("📷 1 — Utiliser la caméra", use_container_width=True):
-                st.session_state.mode = "camera"
-                st.rerun()
-        with col2:
-            if st.button("📁 2 — Charger un fichier", use_container_width=True):
-                st.session_state.mode = "file"
-                st.rerun()
-
-    # --- MODE CAMÉRA ---
-    elif st.session_state.mode == "camera":
+    # =========================================================
+    # VERSION MOBILE — caméra uniquement
+    # =========================================================
+    if is_mobile:
         with st.chat_message("assistant"):
-            st.write("📷 Prenez une photo avec votre caméra :")
+            st.write("""Bonjour ! 👋 Je suis un assistant de **reconnaissance d'émotions faciales**.
 
-        # Afficher le résultat s'il existe
+Je peux analyser une photo de visage et détecter parmi 7 émotions :
+
+😮 Surprise · 😨 Peur · 🤢 Dégoût · 😄 Joie · 😢 Tristesse · 😠 Colère · 😐 Neutre
+
+📷 Prenez une photo pour commencer.""")
+
         if st.session_state.result_image is not None:
             with st.chat_message("user"):
                 st.image(st.session_state.result_image, width=300)
             with st.chat_message("assistant"):
                 st.write(st.session_state.result_text)
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("▶️ Continuer", use_container_width=True):
-                    st.session_state.result_text = None
-                    st.session_state.result_image = None
-                    st.session_state.input_key += 1
-                    st.rerun()
-            with col2:
-                if st.button("↩️ Changer de mode", use_container_width=True):
-                    st.session_state.mode = None
-                    st.session_state.result_text = None
-                    st.session_state.result_image = None
-                    st.session_state.input_key += 1
-                    st.rerun()
+            if st.button("📷 Nouvelle photo", use_container_width=True):
+                st.session_state.result_text = None
+                st.session_state.result_image = None
+                st.session_state.input_key += 1
+                st.rerun()
         else:
             photo = st.camera_input("Caméra", key=f"camera_{st.session_state.input_key}")
             if photo:
                 run_prediction(photo.getvalue())
 
-    # --- MODE FICHIER ---
-    elif st.session_state.mode == "file":
+    # =========================================================
+    # VERSION DESKTOP — caméra + upload fichier
+    # =========================================================
+    else:
         with st.chat_message("assistant"):
-            st.write("📁 Sélectionnez une image depuis votre PC :")
+            st.write("""Bonjour ! 👋 Je suis un assistant de **reconnaissance d'émotions faciales**.
 
-        # Afficher le résultat s'il existe
-        if st.session_state.result_image is not None:
-            with st.chat_message("user"):
-                st.image(st.session_state.result_image, width=300)
-            with st.chat_message("assistant"):
-                st.write(st.session_state.result_text)
+Je peux analyser une photo de visage et détecter parmi 7 émotions :
+
+😮 Surprise · 😨 Peur · 🤢 Dégoût · 😄 Joie · 😢 Tristesse · 😠 Colère · 😐 Neutre
+
+Comment souhaitez-vous procéder ?
+
+**1️⃣ Utiliser la caméra** — prenez une photo en direct
+**2️⃣ Charger un fichier** — sélectionnez une image depuis votre PC""")
+
+        # Choix du mode
+        if st.session_state.mode is None:
+            st.session_state.result_text = None
+            st.session_state.result_image = None
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("▶️ Continuer", use_container_width=True):
-                    st.session_state.result_text = None
-                    st.session_state.result_image = None
-                    st.session_state.input_key += 1
+                if st.button("📷 1 — Utiliser la caméra", use_container_width=True):
+                    st.session_state.mode = "camera"
                     st.rerun()
             with col2:
-                if st.button("↩️ Changer de mode", use_container_width=True):
-                    st.session_state.mode = None
-                    st.session_state.result_text = None
-                    st.session_state.result_image = None
-                    st.session_state.input_key += 1
+                if st.button("📁 2 — Charger un fichier", use_container_width=True):
+                    st.session_state.mode = "file"
                     st.rerun()
+
         else:
-            uploaded = st.file_uploader(
-                "Image", type=["jpg", "jpeg", "png"],
-                label_visibility="collapsed",
-                key=f"file_{st.session_state.input_key}"
-            )
-            if uploaded:
-                run_prediction(uploaded.getvalue())
+            # Résultat commun aux deux modes desktop
+            if st.session_state.result_image is not None:
+                with st.chat_message("user"):
+                    st.image(st.session_state.result_image, width=300)
+                with st.chat_message("assistant"):
+                    st.write(st.session_state.result_text)
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("▶️ Continuer", use_container_width=True):
+                        st.session_state.result_text = None
+                        st.session_state.result_image = None
+                        st.session_state.input_key += 1
+                        st.rerun()
+                with col2:
+                    if st.button("↩️ Changer de mode", use_container_width=True):
+                        st.session_state.mode = None
+                        st.session_state.result_text = None
+                        st.session_state.result_image = None
+                        st.session_state.input_key += 1
+                        st.rerun()
+
+            # --- MODE CAMÉRA desktop ---
+            elif st.session_state.mode == "camera":
+                with st.chat_message("assistant"):
+                    st.write("📷 Prenez une photo avec votre caméra :")
+                photo = st.camera_input("Caméra", key=f"camera_{st.session_state.input_key}")
+                if photo:
+                    run_prediction(photo.getvalue())
+
+            # --- MODE FICHIER desktop ---
+            elif st.session_state.mode == "file":
+                with st.chat_message("assistant"):
+                    st.write("📁 Sélectionnez une image depuis votre PC :")
+                uploaded = st.file_uploader(
+                    "Image",
+                    type=["jpg", "jpeg", "png", "webp", "heic", "heif", "bmp"],
+                    label_visibility="collapsed",
+                    key=f"file_{st.session_state.input_key}"
+                )
+                if uploaded is not None:
+                    run_prediction(uploaded.getvalue())
