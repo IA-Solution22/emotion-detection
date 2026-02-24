@@ -1,8 +1,8 @@
 import streamlit as st
 import numpy as np
 import cv2
-from tensorflow.keras.models import load_model
-from tensorflow.keras.applications.vgg16 import preprocess_input
+from PIL import Image
+import io
 
 MODEL_PATH = "models/model_raf.h5"
 
@@ -92,72 +92,85 @@ p, li, label {
 """
 
 
-@st.cache_resource
+@st.cache_resource(show_spinner="Chargement du modèle IA... (première fois ~60s)")
 def load_resources():
+    import os
+    if not os.path.exists(MODEL_PATH):
+        raise FileNotFoundError(f"Modèle introuvable : {MODEL_PATH}")
+    from tensorflow.keras.models import load_model
+    from tensorflow.keras.applications.vgg16 import preprocess_input
     model = load_model(MODEL_PATH)
     cascade = cv2.CascadeClassifier(
         cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
     )
-    return model, cascade
+    return model, cascade, preprocess_input
+
+
+def image_bytes_to_cv2(image_bytes):
+    """Convertit les bytes d'image en tableau OpenCV BGR via PIL (support universel)."""
+    pil_img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    img_rgb = np.array(pil_img)
+    return cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
 
 
 def predict(image_bytes):
-    model, cascade = load_resources()
+    try:
+        model, cascade, preprocess_input = load_resources()
 
-    file_bytes = np.frombuffer(image_bytes, np.uint8)
-    img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
-    if img is None:
-        return 0, []
+        img = image_bytes_to_cv2(image_bytes)
 
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
 
-    if len(faces) == 0:
-        return 0, []
+        if len(faces) == 0:
+            return 0, [], None
 
-    batch, boxes = [], []
-    for (x, y, w, h) in faces:
-        roi = cv2.resize(img[y:y + h, x:x + w], (100, 100))
-        batch.append(cv2.cvtColor(roi, cv2.COLOR_BGR2RGB))
-        boxes.append((x, y, w, h))
+        batch, boxes = [], []
+        for (x, y, w, h) in faces:
+            roi = cv2.resize(img[y:y + h, x:x + w], (100, 100))
+            batch.append(cv2.cvtColor(roi, cv2.COLOR_BGR2RGB))
+            boxes.append((x, y, w, h))
 
-    preds = model.predict(
-        preprocess_input(np.array(batch, dtype="float32")), verbose=0
-    )
+        preds = model.predict(
+            preprocess_input(np.array(batch, dtype="float32")), verbose=0
+        )
 
-    results = []
-    for i in range(len(boxes)):
-        idx = int(np.argmax(preds[i]))
-        results.append({
-            "emotion":    CLASS_NAMES[idx],
-            "confidence": round(float(np.max(preds[i])) * 100, 2),
-        })
+        results = []
+        for i in range(len(boxes)):
+            idx = int(np.argmax(preds[i]))
+            results.append({
+                "emotion":    CLASS_NAMES[idx],
+                "confidence": round(float(np.max(preds[i])) * 100, 2),
+            })
 
-    return len(results), results
+        return len(results), results, None
+
+    except Exception as e:
+        return 0, [], str(e)
 
 
-def display_result(image_bytes):
-    with st.chat_message("user"):
-        st.image(image_bytes, width=300)
-
+def run_prediction(image_bytes):
+    """Lance la prédiction, stocke le résultat dans session_state."""
     with st.spinner("Analyse en cours..."):
-        faces, predictions = predict(image_bytes)
+        faces, predictions, error = predict(image_bytes)
 
-    if faces == 0:
-        bot_text = "😕 Aucun visage détecté dans la photo."
+    if error:
+        st.session_state.result_text = f"❌ Erreur : {error}"
+    elif faces == 0:
+        st.session_state.result_text = "😕 Aucun visage détecté dans la photo."
     elif faces == 1:
         pred = predictions[0]
         emoji = EMOTION_EMOJI.get(pred["emotion"], "")
-        bot_text = f"{emoji} {pred['emotion']} — {pred['confidence']:.1f}% de confiance"
+        st.session_state.result_text = f"{emoji} {pred['emotion']} — {pred['confidence']:.1f}% de confiance"
     else:
         lines = []
         for i, pred in enumerate(predictions, 1):
             emoji = EMOTION_EMOJI.get(pred["emotion"], "")
             lines.append(f"{i}. {emoji} {pred['emotion']} — {pred['confidence']:.1f}% de confiance")
-        bot_text = "\n".join(lines)
+        st.session_state.result_text = "\n".join(lines)
 
-    with st.chat_message("assistant"):
-        st.write(bot_text)
+    st.session_state.result_image = image_bytes
+    st.rerun()
 
 
 # --- INIT ---
@@ -165,17 +178,32 @@ st.set_page_config(page_title="Détection d'émotions", page_icon="😊")
 st.markdown(CSS, unsafe_allow_html=True)
 st.title("Détection d'émotions faciales")
 
+# Pré-chargement du modèle au démarrage
+try:
+    load_resources()
+except Exception as e:
+    st.error(f"Erreur au chargement du modèle : {e}")
+    st.stop()
+
+# Session state
 if "mode" not in st.session_state:
     st.session_state.mode = None
 if "input_key" not in st.session_state:
     st.session_state.input_key = 0
+if "result_text" not in st.session_state:
+    st.session_state.result_text = None
+if "result_image" not in st.session_state:
+    st.session_state.result_image = None
 
 with st.container(border=True, key="chatbot"):
 
     with st.chat_message("assistant"):
         st.write(WELCOME_MESSAGE)
 
+    # Choix du mode
     if st.session_state.mode is None:
+        st.session_state.result_text = None
+        st.session_state.result_image = None
         col1, col2 = st.columns(2)
         with col1:
             if st.button("📷 1 — Utiliser la caméra", use_container_width=True):
@@ -186,40 +214,66 @@ with st.container(border=True, key="chatbot"):
                 st.session_state.mode = "file"
                 st.rerun()
 
+    # --- MODE CAMÉRA ---
     elif st.session_state.mode == "camera":
         with st.chat_message("assistant"):
             st.write("📷 Prenez une photo avec votre caméra :")
-        photo = st.camera_input("Caméra", key=f"camera_{st.session_state.input_key}")
-        if photo:
-            display_result(photo.getvalue())
+
+        # Afficher le résultat s'il existe
+        if st.session_state.result_image is not None:
+            with st.chat_message("user"):
+                st.image(st.session_state.result_image, width=300)
+            with st.chat_message("assistant"):
+                st.write(st.session_state.result_text)
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("▶️ Continuer", use_container_width=True):
+                    st.session_state.result_text = None
+                    st.session_state.result_image = None
                     st.session_state.input_key += 1
                     st.rerun()
             with col2:
                 if st.button("↩️ Changer de mode", use_container_width=True):
                     st.session_state.mode = None
+                    st.session_state.result_text = None
+                    st.session_state.result_image = None
                     st.session_state.input_key += 1
                     st.rerun()
+        else:
+            photo = st.camera_input("Caméra", key=f"camera_{st.session_state.input_key}")
+            if photo:
+                run_prediction(photo.getvalue())
 
+    # --- MODE FICHIER ---
     elif st.session_state.mode == "file":
         with st.chat_message("assistant"):
             st.write("📁 Sélectionnez une image depuis votre PC :")
-        uploaded = st.file_uploader(
-            "Image", type=["jpg", "jpeg", "png", "webp"],
-            label_visibility="collapsed",
-            key=f"file_{st.session_state.input_key}"
-        )
-        if uploaded:
-            display_result(uploaded.getvalue())
+
+        # Afficher le résultat s'il existe
+        if st.session_state.result_image is not None:
+            with st.chat_message("user"):
+                st.image(st.session_state.result_image, width=300)
+            with st.chat_message("assistant"):
+                st.write(st.session_state.result_text)
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("▶️ Continuer", use_container_width=True):
+                    st.session_state.result_text = None
+                    st.session_state.result_image = None
                     st.session_state.input_key += 1
                     st.rerun()
             with col2:
                 if st.button("↩️ Changer de mode", use_container_width=True):
                     st.session_state.mode = None
+                    st.session_state.result_text = None
+                    st.session_state.result_image = None
                     st.session_state.input_key += 1
                     st.rerun()
+        else:
+            uploaded = st.file_uploader(
+                "Image", type=["jpg", "jpeg", "png"],
+                label_visibility="collapsed",
+                key=f"file_{st.session_state.input_key}"
+            )
+            if uploaded:
+                run_prediction(uploaded.getvalue())
